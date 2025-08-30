@@ -1,0 +1,724 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Campaign {
+  id                String            @id @default(uuid())
+  name              String
+  description       String?
+  companyId         String
+  brandId           String?
+  categoryId        String?
+  type              CampaignType
+  status            CampaignStatus    @default(DRAFT)
+  objective         String
+  targetAudience    Json              @default("{}")
+  budget            Decimal           @db.Decimal(15,2)
+  actualSpend       Decimal           @default(0) @db.Decimal(15,2)
+  currency          String            @default("USD")
+  startDate         DateTime
+  endDate           DateTime
+  regions           String[]
+  channels          String[]
+  kpis              Json              @default("[]")
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  promotions        Promotion[]
+  activities        Activity[]
+  budgetAllocations BudgetAllocation[]
+  performance       CampaignPerformance[]
+  approvals         Approval[]
+
+  @@index([companyId, status])
+  @@index([startDate, endDate])
+  @@map("campaigns")
+}
+
+model Promotion {
+  id                String            @id @default(uuid())
+  campaignId        String
+  name              String
+  description       String?
+  type              PromotionType
+  mechanic          PromotionMechanic
+  status            PromotionStatus   @default(DRAFT)
+  priority          Priority          @default(MEDIUM)
+  budget            Decimal           @db.Decimal(15,2)
+  actualSpend       Decimal           @default(0) @db.Decimal(15,2)
+  currency          String            @default("USD")
+  startDate         DateTime
+  endDate           DateTime
+  products          Json              @default("[]")
+  customers         Json              @default("[]")
+  channels          String[]
+  regions           String[]
+  terms             Json              @default("{}")
+  requirements      Json              @default("[]")
+  approvalRequired  Boolean           @default(true)
+  roi               Decimal?          @db.Decimal(10,4)
+  incrementalSales  Decimal?          @db.Decimal(15,2)
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  campaign          Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  activities        Activity[]
+  claims            Claim[]
+  deductions        Deduction[]
+  performance       PromotionPerformance[]
+  approvals         Approval[]
+
+  @@index([campaignId, status])
+  @@index([startDate, endDate])
+  @@index([type, status])
+  @@map("promotions")
+}
+
+model Activity {
+  id                String            @id @default(uuid())
+  campaignId        String?
+  promotionId       String?
+  name              String
+  description       String?
+  type              ActivityType
+  status            ActivityStatus    @default(PLANNED)
+  priority          Priority          @default(MEDIUM)
+  budget            Decimal           @db.Decimal(15,2)
+  actualCost        Decimal           @default(0) @db.Decimal(15,2)
+  currency          String            @default("USD")
+  startDate         DateTime
+  endDate           DateTime
+  assignedTo        String?
+  completedBy       String?
+  completedAt       DateTime?
+  deliverables      Json              @default("[]")
+  requirements      Json              @default("[]")
+  dependencies      String[]
+  tags              String[]
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  campaign          Campaign?         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  promotion         Promotion?        @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  tasks             Task[]
+  expenses          Expense[]
+
+  @@index([campaignId, status])
+  @@index([promotionId, status])
+  @@index([assignedTo, status])
+  @@map("activities")
+}
+
+model Task {
+  id                String            @id @default(uuid())
+  activityId        String
+  name              String
+  description       String?
+  status            TaskStatus        @default(TODO)
+  priority          Priority          @default(MEDIUM)
+  assignedTo        String?
+  dueDate           DateTime?
+  completedBy       String?
+  completedAt       DateTime?
+  estimatedHours    Int?
+  actualHours       Int?
+  dependencies      String[]
+  tags              String[]
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  activity          Activity          @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId, status])
+  @@index([assignedTo, status])
+  @@map("tasks")
+}
+
+model BudgetAllocation {
+  id                String            @id @default(uuid())
+  campaignId        String
+  category          String
+  subcategory       String?
+  allocatedAmount   Decimal           @db.Decimal(15,2)
+  spentAmount       Decimal           @default(0) @db.Decimal(15,2)
+  remainingAmount   Decimal           @db.Decimal(15,2)
+  currency          String            @default("USD")
+  period            String            // e.g., "2024-Q1", "2024-01"
+  status            AllocationStatus  @default(ACTIVE)
+  notes             String?
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  campaign          Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  expenses          Expense[]
+
+  @@unique([campaignId, category, subcategory, period])
+  @@index([campaignId, status])
+  @@map("budget_allocations")
+}
+
+model Expense {
+  id                String            @id @default(uuid())
+  activityId        String?
+  allocationId      String?
+  type              ExpenseType
+  category          String
+  subcategory       String?
+  description       String
+  amount            Decimal           @db.Decimal(15,2)
+  currency          String            @default("USD")
+  vendor            String?
+  invoiceNumber     String?
+  invoiceDate       DateTime?
+  paymentDate       DateTime?
+  paymentStatus     PaymentStatus     @default(PENDING)
+  approvalStatus    ApprovalStatus    @default(PENDING)
+  receipts          Json              @default("[]")
+  tags              String[]
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  activity          Activity?         @relation(fields: [activityId], references: [id])
+  allocation        BudgetAllocation? @relation(fields: [allocationId], references: [id])
+
+  @@index([type, paymentStatus])
+  @@index([category, createdAt])
+  @@map("expenses")
+}
+
+model Claim {
+  id                String            @id @default(uuid())
+  promotionId       String
+  claimNumber       String            @unique
+  type              ClaimType
+  status            ClaimStatus       @default(SUBMITTED)
+  customerId        String
+  customerName      String
+  amount            Decimal           @db.Decimal(15,2)
+  currency          String            @default("USD")
+  claimDate         DateTime
+  periodStart       DateTime
+  periodEnd         DateTime
+  products          Json              @default("[]")
+  documentation     Json              @default("[]")
+  validationStatus  ValidationStatus  @default(PENDING)
+  validationNotes   String?
+  approvalStatus    ApprovalStatus    @default(PENDING)
+  approvalNotes     String?
+  paymentStatus     PaymentStatus     @default(PENDING)
+  paymentDate       DateTime?
+  rejectionReason   String?
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  promotion         Promotion         @relation(fields: [promotionId], references: [id])
+
+  @@index([promotionId, status])
+  @@index([customerId, claimDate])
+  @@index([status, claimDate])
+  @@map("claims")
+}
+
+model Deduction {
+  id                String            @id @default(uuid())
+  promotionId       String?
+  deductionNumber   String            @unique
+  type              DeductionType
+  status            DeductionStatus   @default(RECEIVED)
+  customerId        String
+  customerName      String
+  amount            Decimal           @db.Decimal(15,2)
+  currency          String            @default("USD")
+  deductionDate     DateTime
+  reason            String
+  description       String?
+  documentation     Json              @default("[]")
+  disputeStatus     DisputeStatus     @default(NONE)
+  disputeReason     String?
+  resolutionStatus  ResolutionStatus  @default(PENDING)
+  resolutionDate    DateTime?
+  resolutionAmount  Decimal?          @db.Decimal(15,2)
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  // Relations
+  promotion         Promotion?        @relation(fields: [promotionId], references: [id])
+
+  @@index([customerId, deductionDate])
+  @@index([status, deductionDate])
+  @@index([disputeStatus])
+  @@map("deductions")
+}
+
+model CampaignPerformance {
+  id                String            @id @default(uuid())
+  campaignId        String
+  period            String            // e.g., "2024-01-01", "2024-W01"
+  periodType        PeriodType        @default(DAILY)
+  metrics           Json              @default("{}")
+  kpis              Json              @default("{}")
+  roi               Decimal?          @db.Decimal(10,4)
+  incrementalSales  Decimal?          @db.Decimal(15,2)
+  reach             Int?
+  impressions       Int?
+  engagement        Decimal?          @db.Decimal(10,4)
+  conversion        Decimal?          @db.Decimal(10,4)
+  costPerAcquisition Decimal?         @db.Decimal(10,2)
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  campaign          Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, period, periodType])
+  @@index([campaignId, periodType])
+  @@map("campaign_performance")
+}
+
+model PromotionPerformance {
+  id                String            @id @default(uuid())
+  promotionId       String
+  period            String
+  periodType        PeriodType        @default(DAILY)
+  metrics           Json              @default("{}")
+  sales             Decimal?          @db.Decimal(15,2)
+  volume            Decimal?          @db.Decimal(15,2)
+  roi               Decimal?          @db.Decimal(10,4)
+  incrementalSales  Decimal?          @db.Decimal(15,2)
+  incrementalVolume Decimal?          @db.Decimal(15,2)
+  participation     Decimal?          @db.Decimal(10,4)
+  redemption        Decimal?          @db.Decimal(10,4)
+  costPerUnit       Decimal?          @db.Decimal(10,2)
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  promotion         Promotion         @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, period, periodType])
+  @@index([promotionId, periodType])
+  @@map("promotion_performance")
+}
+
+model Approval {
+  id                String            @id @default(uuid())
+  entityType        String            // Campaign, Promotion, etc.
+  entityId          String
+  type              ApprovalType
+  status            ApprovalStatus    @default(PENDING)
+  level             Int               @default(1)
+  approver          String
+  requestedBy       String
+  requestedAt       DateTime          @default(now())
+  approvedBy        String?
+  approvedAt        DateTime?
+  rejectedBy        String?
+  rejectedAt        DateTime?
+  comments          String?
+  conditions        Json              @default("[]")
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  campaign          Campaign?         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  promotion         Promotion?        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@index([approver, status])
+  @@index([status, requestedAt])
+  @@map("approvals")
+}
+
+model Contract {
+  id                String            @id @default(uuid())
+  contractNumber    String            @unique
+  name              String
+  type              ContractType
+  status            ContractStatus    @default(DRAFT)
+  customerId        String
+  customerName      String
+  startDate         DateTime
+  endDate           DateTime
+  value             Decimal           @db.Decimal(15,2)
+  currency          String            @default("USD")
+  terms             Json              @default("{}")
+  conditions        Json              @default("[]")
+  milestones        Json              @default("[]")
+  documents         Json              @default("[]")
+  renewalTerms      Json              @default("{}")
+  complianceStatus  ComplianceStatus  @default(COMPLIANT)
+  lastReviewDate    DateTime?
+  nextReviewDate    DateTime?
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  @@index([customerId, status])
+  @@index([status, endDate])
+  @@map("contracts")
+}
+
+model Product {
+  id                String            @id @default(uuid())
+  sku               String            @unique
+  name              String
+  description       String?
+  brandId           String
+  brandName         String
+  categoryId        String
+  categoryName      String
+  subcategoryId     String?
+  subcategoryName   String?
+  unitOfMeasure     String
+  packSize          String?
+  weight            Decimal?          @db.Decimal(10,3)
+  dimensions        Json?
+  barcode           String?
+  status            ProductStatus     @default(ACTIVE)
+  launchDate        DateTime?
+  discontinueDate   DateTime?
+  pricing           Json              @default("{}")
+  attributes        Json              @default("{}")
+  images            Json              @default("[]")
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  @@index([brandId, status])
+  @@index([categoryId, status])
+  @@index([status, launchDate])
+  @@map("products")
+}
+
+model Customer {
+  id                String            @id @default(uuid())
+  customerNumber    String            @unique
+  name              String
+  type              CustomerType
+  tier              CustomerTier      @default(STANDARD)
+  status            CustomerStatus    @default(ACTIVE)
+  parentId          String?
+  hierarchy         Json              @default("[]")
+  contactInfo       Json              @default("{}")
+  addresses         Json              @default("[]")
+  paymentTerms      Json              @default("{}")
+  creditLimit       Decimal?          @db.Decimal(15,2)
+  currency          String            @default("USD")
+  region            String?
+  territory         String?
+  salesRep          String?
+  keyAccount        Boolean           @default(false)
+  attributes        Json              @default("{}")
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String?
+
+  @@index([type, status])
+  @@index([tier, region])
+  @@index([salesRep, status])
+  @@map("customers")
+}
+
+// Enums
+enum CampaignType {
+  BRAND_AWARENESS
+  PRODUCT_LAUNCH
+  SEASONAL
+  PROMOTIONAL
+  TRADE_SUPPORT
+  CUSTOMER_ACQUISITION
+  RETENTION
+  COMPETITIVE_RESPONSE
+}
+
+enum CampaignStatus {
+  DRAFT
+  PLANNING
+  APPROVED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum PromotionType {
+  TRADE_ALLOWANCE
+  VOLUME_DISCOUNT
+  REBATE
+  COOPERATIVE_ADVERTISING
+  SLOTTING_FEE
+  DISPLAY_ALLOWANCE
+  PROMOTIONAL_PRICING
+  BILL_BACK
+  SCAN_DOWN
+  OFF_INVOICE
+}
+
+enum PromotionMechanic {
+  PERCENTAGE_DISCOUNT
+  FIXED_AMOUNT
+  TIERED_DISCOUNT
+  VOLUME_BASED
+  PERFORMANCE_BASED
+  LUMP_SUM
+  PER_UNIT
+  SCAN_BASED
+}
+
+enum PromotionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum ActivityType {
+  PLANNING
+  CREATIVE_DEVELOPMENT
+  MEDIA_BUYING
+  PRODUCTION
+  EXECUTION
+  MONITORING
+  REPORTING
+  OPTIMIZATION
+}
+
+enum ActivityStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AllocationStatus {
+  ACTIVE
+  EXHAUSTED
+  FROZEN
+  CANCELLED
+}
+
+enum ExpenseType {
+  MEDIA
+  PRODUCTION
+  AGENCY_FEE
+  TALENT
+  TRAVEL
+  MATERIALS
+  TECHNOLOGY
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CONDITIONAL
+}
+
+enum ClaimType {
+  TRADE_ALLOWANCE
+  REBATE
+  COOPERATIVE_ADVERTISING
+  VOLUME_DISCOUNT
+  PROMOTIONAL_SUPPORT
+  OTHER
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  VALIDATED
+  APPROVED
+  PAID
+  REJECTED
+  DISPUTED
+}
+
+enum ValidationStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+  REQUIRES_INFO
+}
+
+enum DeductionType {
+  TRADE_ALLOWANCE
+  REBATE
+  ADVERTISING
+  PROMOTIONAL
+  VOLUME_DISCOUNT
+  SLOTTING
+  OTHER
+}
+
+enum DeductionStatus {
+  RECEIVED
+  UNDER_REVIEW
+  VALIDATED
+  DISPUTED
+  RESOLVED
+  REJECTED
+}
+
+enum DisputeStatus {
+  NONE
+  INITIATED
+  UNDER_REVIEW
+  ESCALATED
+  RESOLVED
+}
+
+enum ResolutionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  PARTIALLY_ACCEPTED
+}
+
+enum PeriodType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum ApprovalType {
+  BUDGET
+  CAMPAIGN
+  PROMOTION
+  CONTRACT
+  EXPENSE
+  CLAIM
+}
+
+enum ContractType {
+  TRADE_AGREEMENT
+  PROMOTIONAL_AGREEMENT
+  ADVERTISING_AGREEMENT
+  VOLUME_COMMITMENT
+  EXCLUSIVE_AGREEMENT
+  DISTRIBUTION_AGREEMENT
+}
+
+enum ContractStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  RENEWED
+}
+
+enum ComplianceStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  UNDER_REVIEW
+  REMEDIATION_REQUIRED
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+  PENDING_LAUNCH
+}
+
+enum CustomerType {
+  RETAILER
+  DISTRIBUTOR
+  WHOLESALER
+  DIRECT_CUSTOMER
+  ONLINE_MARKETPLACE
+}
+
+enum CustomerTier {
+  STRATEGIC
+  KEY_ACCOUNT
+  STANDARD
+  EMERGING
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PROSPECT
+}

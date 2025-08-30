@@ -1,0 +1,242 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id                String            @id @default(uuid())
+  name              String
+  code              String            @unique
+  type              CompanyType
+  parentCompanyId   String?
+  status            CompanyStatus     @default(ACTIVE)
+  settings          Json
+  licenseInfo       Json
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String
+
+  // Relations
+  parentCompany     Company?          @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id])
+  subsidiaries      Company[]         @relation("CompanyHierarchy")
+  users             UserCompany[]
+  licenses          License[]
+  auditLogs         AuditLog[]
+
+  @@map("companies")
+}
+
+model License {
+  id                String            @id @default(uuid())
+  companyId         String
+  edition           LicenseEdition
+  licenseType       LicenseType
+  maxUsers          Int               @default(-1) // -1 means unlimited
+  maxCompanies      Int               @default(-1) // -1 means unlimited
+  currentUsers      Int               @default(0)
+  currentCompanies  Int               @default(0)
+  features          String[]
+  addOns            Json              @default("[]")
+  validFrom         DateTime
+  validUntil        DateTime
+  autoRenewal       Boolean           @default(false)
+  status            LicenseStatus     @default(ACTIVE)
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String
+
+  // Relations
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  usageRecords      LicenseUsage[]
+  auditLogs         AuditLog[]
+
+  @@map("licenses")
+}
+
+model LicenseUsage {
+  id                String            @id @default(uuid())
+  licenseId         String
+  userId            String?
+  feature           String
+  usageType         UsageType
+  quantity          Int               @default(1)
+  timestamp         DateTime          @default(now())
+  metadata          Json              @default("{}")
+
+  // Relations
+  license           License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("license_usage")
+}
+
+model UserCompany {
+  id                String            @id @default(uuid())
+  userId            String
+  companyId         String
+  roles             String[]
+  permissions       Json              @default("[]")
+  accessLevel       AccessLevel       @default(FULL)
+  status            UserCompanyStatus @default(ACTIVE)
+  joinedAt          DateTime          @default(now())
+  leftAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String
+
+  // Relations
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("user_companies")
+}
+
+model Role {
+  id                String            @id @default(uuid())
+  name              String
+  description       String?
+  companyId         String?           // null means global role
+  permissions       Json              @default("[]")
+  isDefault         Boolean           @default(false)
+  isSystem          Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String
+
+  @@unique([name, companyId])
+  @@map("roles")
+}
+
+model Permission {
+  id                String            @id @default(uuid())
+  resource          String
+  action            String
+  description       String?
+  isSystem          Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model AuditLog {
+  id                String            @id @default(uuid())
+  entityType        String
+  entityId          String
+  action            AuditAction
+  oldValues         Json?
+  newValues         Json?
+  changes           Json?
+  userId            String
+  companyId         String?
+  licenseId         String?
+  ipAddress         String?
+  userAgent         String?
+  timestamp         DateTime          @default(now())
+  metadata          Json              @default("{}")
+
+  // Relations
+  company           Company?          @relation(fields: [companyId], references: [id])
+  license           License?          @relation(fields: [licenseId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([companyId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model SystemConfig {
+  id                String            @id @default(uuid())
+  key               String            @unique
+  value             Json
+  description       String?
+  isEncrypted       Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String
+  updatedBy         String
+
+  @@map("system_config")
+}
+
+// Enums
+enum CompanyType {
+  HOLDING
+  SUBSIDIARY
+  DIVISION
+  BRAND
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum LicenseEdition {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+  PLATFORM
+}
+
+enum LicenseType {
+  NAMED_USER
+  CONCURRENT_USER
+  MODULE_BASED
+  TRANSACTION_BASED
+}
+
+enum LicenseStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum AccessLevel {
+  FULL
+  LIMITED
+  READ_ONLY
+}
+
+enum UserCompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum UsageType {
+  LOGIN
+  FEATURE_ACCESS
+  API_CALL
+  TRANSACTION
+  STORAGE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ACCESS
+  EXPORT
+  IMPORT
+}

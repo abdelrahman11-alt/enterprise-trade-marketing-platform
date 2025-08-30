@@ -1,0 +1,431 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id                String            @id @default(uuid())
+  userId            String
+  companyId         String
+  sessionId         String
+  title             String?
+  context           Json              @default("{}")
+  metadata          Json              @default("{}")
+  status            ConversationStatus @default(ACTIVE)
+  startedAt         DateTime          @default(now())
+  endedAt           DateTime?
+  lastMessageAt     DateTime          @default(now())
+  messageCount      Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  messages          Message[]
+  insights          ConversationInsight[]
+
+  @@index([userId, companyId])
+  @@index([sessionId])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id                String            @id @default(uuid())
+  conversationId    String
+  role              MessageRole
+  content           String
+  contentType       ContentType       @default(TEXT)
+  attachments       Json              @default("[]")
+  metadata          Json              @default("{}")
+  intent            String?
+  entities          Json              @default("[]")
+  sentiment         Float?
+  confidence        Float?
+  processingTime    Int?              // milliseconds
+  tokens            Int?
+  cost              Float?
+  timestamp         DateTime          @default(now())
+
+  // Relations
+  conversation      Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  feedback          MessageFeedback[]
+
+  @@index([conversationId, timestamp])
+  @@index([role, timestamp])
+  @@map("messages")
+}
+
+model MessageFeedback {
+  id                String            @id @default(uuid())
+  messageId         String
+  userId            String
+  rating            Int               // 1-5 scale
+  feedback          String?
+  category          FeedbackCategory?
+  timestamp         DateTime          @default(now())
+
+  // Relations
+  message           Message           @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_feedback")
+}
+
+model ConversationInsight {
+  id                String            @id @default(uuid())
+  conversationId    String
+  type              InsightType
+  title             String
+  description       String
+  data              Json
+  confidence        Float
+  actionable        Boolean           @default(false)
+  priority          Priority          @default(MEDIUM)
+  status            InsightStatus     @default(ACTIVE)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  conversation      Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, type])
+  @@index([status, priority])
+  @@map("conversation_insights")
+}
+
+model AIModel {
+  id                String            @id @default(uuid())
+  name              String            @unique
+  displayName       String
+  description       String?
+  type              ModelType
+  version           String
+  provider          AIProvider
+  config            Json              @default("{}")
+  capabilities      String[]
+  status            ModelStatus       @default(ACTIVE)
+  accuracy          Float?
+  lastTrainedAt     DateTime?
+  trainingData      Json?
+  metrics           Json              @default("{}")
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  // Relations
+  predictions       Prediction[]
+  trainingJobs      TrainingJob[]
+
+  @@map("ai_models")
+}
+
+model Prediction {
+  id                String            @id @default(uuid())
+  modelId           String
+  userId            String?
+  companyId         String?
+  input             Json
+  output            Json
+  confidence        Float?
+  processingTime    Int?              // milliseconds
+  cost              Float?
+  feedback          Json?
+  metadata          Json              @default("{}")
+  timestamp         DateTime          @default(now())
+
+  // Relations
+  model             AIModel           @relation(fields: [modelId], references: [id])
+
+  @@index([modelId, timestamp])
+  @@index([userId, companyId])
+  @@map("predictions")
+}
+
+model TrainingJob {
+  id                String            @id @default(uuid())
+  modelId           String
+  name              String
+  description       String?
+  config            Json
+  dataset           Json
+  status            TrainingStatus    @default(PENDING)
+  progress          Float             @default(0)
+  metrics           Json              @default("{}")
+  logs              String?
+  error             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  duration          Int?              // seconds
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+
+  // Relations
+  model             AIModel           @relation(fields: [modelId], references: [id])
+
+  @@index([modelId, status])
+  @@index([status, createdAt])
+  @@map("training_jobs")
+}
+
+model KnowledgeBase {
+  id                String            @id @default(uuid())
+  name              String
+  description       String?
+  companyId         String?           // null means global knowledge base
+  type              KnowledgeType
+  content           String
+  embeddings        Json?             // Vector embeddings
+  metadata          Json              @default("{}")
+  tags              String[]
+  category          String?
+  language          String            @default("en")
+  status            ContentStatus     @default(ACTIVE)
+  version           Int               @default(1)
+  lastUpdated       DateTime          @default(now())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  @@index([companyId, type])
+  @@index([category, status])
+  @@index([tags])
+  @@map("knowledge_base")
+}
+
+model UserPreference {
+  id                String            @id @default(uuid())
+  userId            String
+  companyId         String?
+  category          String
+  key               String
+  value             Json
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([userId, companyId, category, key])
+  @@index([userId, category])
+  @@map("user_preferences")
+}
+
+model AIUsageMetrics {
+  id                String            @id @default(uuid())
+  userId            String?
+  companyId         String?
+  service           String            // chatbot, prediction, vision, etc.
+  operation         String            // chat, predict, analyze, etc.
+  tokens            Int?
+  cost              Float?
+  duration          Int?              // milliseconds
+  success           Boolean           @default(true)
+  error             String?
+  metadata          Json              @default("{}")
+  timestamp         DateTime          @default(now())
+
+  @@index([userId, companyId, timestamp])
+  @@index([service, operation, timestamp])
+  @@map("ai_usage_metrics")
+}
+
+model AutoMLExperiment {
+  id                String            @id @default(uuid())
+  name              String
+  description       String?
+  companyId         String
+  userId            String
+  problemType       ProblemType
+  dataset           Json
+  targetColumn      String
+  features          String[]
+  config            Json              @default("{}")
+  status            ExperimentStatus  @default(PENDING)
+  progress          Float             @default(0)
+  bestModel         Json?
+  bestScore         Float?
+  models            Json              @default("[]")
+  metrics           Json              @default("{}")
+  logs              String?
+  error             String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  duration          Int?              // seconds
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([companyId, userId])
+  @@index([status, createdAt])
+  @@map("automl_experiments")
+}
+
+model ImageAnalysis {
+  id                String            @id @default(uuid())
+  userId            String
+  companyId         String
+  filename          String
+  originalUrl       String
+  processedUrl      String?
+  analysisType      AnalysisType
+  results           Json
+  confidence        Float?
+  processingTime    Int?              // milliseconds
+  metadata          Json              @default("{}")
+  tags              String[]
+  status            AnalysisStatus    @default(COMPLETED)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([userId, companyId])
+  @@index([analysisType, createdAt])
+  @@map("image_analysis")
+}
+
+// Enums
+enum ConversationStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  CHART
+  TABLE
+}
+
+enum FeedbackCategory {
+  HELPFUL
+  NOT_HELPFUL
+  INCORRECT
+  INCOMPLETE
+  INAPPROPRIATE
+}
+
+enum InsightType {
+  TREND
+  ANOMALY
+  RECOMMENDATION
+  PREDICTION
+  OPTIMIZATION
+  ALERT
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum InsightStatus {
+  ACTIVE
+  DISMISSED
+  ACTED_UPON
+  EXPIRED
+}
+
+enum ModelType {
+  LANGUAGE_MODEL
+  CLASSIFICATION
+  REGRESSION
+  CLUSTERING
+  RECOMMENDATION
+  COMPUTER_VISION
+  TIME_SERIES
+  ANOMALY_DETECTION
+}
+
+enum AIProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  MICROSOFT
+  HUGGINGFACE
+  CUSTOM
+}
+
+enum ModelStatus {
+  ACTIVE
+  INACTIVE
+  TRAINING
+  DEPRECATED
+}
+
+enum TrainingStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum KnowledgeType {
+  FAQ
+  DOCUMENTATION
+  POLICY
+  PROCEDURE
+  PRODUCT_INFO
+  TRAINING_MATERIAL
+  BEST_PRACTICE
+}
+
+enum ContentStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum ProblemType {
+  CLASSIFICATION
+  REGRESSION
+  CLUSTERING
+  TIME_SERIES
+  ANOMALY_DETECTION
+}
+
+enum ExperimentStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AnalysisType {
+  SHELF_COMPLIANCE
+  PRODUCT_RECOGNITION
+  PLANOGRAM_ANALYSIS
+  BRAND_VISIBILITY
+  COMPETITOR_ANALYSIS
+  QUALITY_CHECK
+  INVENTORY_COUNT
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}

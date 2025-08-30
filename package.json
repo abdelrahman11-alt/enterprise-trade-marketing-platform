@@ -1,0 +1,44 @@
+{
+  "name": "enterprise-trade-marketing-platform",
+  "version": "1.0.0",
+  "description": "Comprehensive multi-company trade marketing platform for FMCG enterprises",
+  "private": true,
+  "workspaces": [
+    "backend/*",
+    "frontend/*"
+  ],
+  "scripts": {
+    "dev": "docker-compose up -d",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces && docker-compose down -v",
+    "setup": "npm install && docker-compose up -d postgres redis kafka elasticsearch",
+    "migrate": "npm run migrate --workspace=backend/company-service",
+    "seed": "npm run seed --workspace=backend/company-service"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0",
+    "concurrently": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "trade-marketing",
+    "fmcg",
+    "enterprise",
+    "multi-company",
+    "microservices",
+    "ai",
+    "analytics"
+  ],
+  "author": "Enterprise Trade Marketing Team",
+  "license": "PROPRIETARY"
+}

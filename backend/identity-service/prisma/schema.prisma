@@ -1,0 +1,377 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String            @id @default(uuid())
+  email             String            @unique
+  username          String?           @unique
+  firstName         String
+  lastName          String
+  displayName       String?
+  avatar            String?
+  phone             String?
+  timezone          String            @default("UTC")
+  locale            String            @default("en")
+  status            UserStatus        @default(ACTIVE)
+  emailVerified     Boolean           @default(false)
+  phoneVerified     Boolean           @default(false)
+  twoFactorEnabled  Boolean           @default(false)
+  twoFactorSecret   String?
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+  passwordChangedAt DateTime?
+  metadata          Json              @default("{}")
+  preferences       Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  // Relations
+  passwords         UserPassword[]
+  sessions          UserSession[]
+  companies         UserCompany[]
+  roles             UserRole[]
+  permissions       UserPermission[]
+  loginAttempts     LoginAttempt[]
+  passwordResets    PasswordReset[]
+  emailVerifications EmailVerification[]
+  socialAccounts    SocialAccount[]
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+model UserPassword {
+  id                String            @id @default(uuid())
+  userId            String
+  passwordHash      String
+  salt              String
+  algorithm         String            @default("bcrypt")
+  isActive          Boolean           @default(true)
+  expiresAt         DateTime?
+  createdAt         DateTime          @default(now())
+  createdBy         String?
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_passwords")
+}
+
+model UserSession {
+  id                String            @id @default(uuid())
+  userId            String
+  sessionToken      String            @unique
+  refreshToken      String?           @unique
+  deviceId          String?
+  deviceInfo        Json?
+  ipAddress         String?
+  userAgent         String?
+  location          Json?
+  isActive          Boolean           @default(true)
+  expiresAt         DateTime
+  lastAccessedAt    DateTime          @default(now())
+  createdAt         DateTime          @default(now())
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model UserCompany {
+  id                String            @id @default(uuid())
+  userId            String
+  companyId         String
+  roles             String[]
+  permissions       Json              @default("[]")
+  accessLevel       AccessLevel       @default(FULL)
+  status            UserCompanyStatus @default(ACTIVE)
+  joinedAt          DateTime          @default(now())
+  leftAt            DateTime?
+  invitedBy         String?
+  approvedBy        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("user_companies")
+}
+
+model Role {
+  id                String            @id @default(uuid())
+  name              String
+  displayName       String
+  description       String?
+  companyId         String?           // null means global role
+  permissions       Json              @default("[]")
+  isDefault         Boolean           @default(false)
+  isSystem          Boolean           @default(false)
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  // Relations
+  userRoles         UserRole[]
+
+  @@unique([name, companyId])
+  @@map("roles")
+}
+
+model UserRole {
+  id                String            @id @default(uuid())
+  userId            String
+  roleId            String
+  companyId         String?
+  assignedBy        String?
+  assignedAt        DateTime          @default(now())
+  expiresAt         DateTime?
+  isActive          Boolean           @default(true)
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role              Role              @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, companyId])
+  @@map("user_roles")
+}
+
+model Permission {
+  id                String            @id @default(uuid())
+  resource          String
+  action            String
+  description       String?
+  category          String?
+  isSystem          Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  userPermissions   UserPermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model UserPermission {
+  id                String            @id @default(uuid())
+  userId            String
+  permissionId      String
+  companyId         String?
+  grantedBy         String?
+  grantedAt         DateTime          @default(now())
+  expiresAt         DateTime?
+  isActive          Boolean           @default(true)
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission        Permission        @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId, companyId])
+  @@map("user_permissions")
+}
+
+model LoginAttempt {
+  id                String            @id @default(uuid())
+  userId            String?
+  email             String
+  ipAddress         String
+  userAgent         String?
+  success           Boolean
+  failureReason     String?
+  location          Json?
+  deviceInfo        Json?
+  timestamp         DateTime          @default(now())
+
+  // Relations
+  user              User?             @relation(fields: [userId], references: [id])
+
+  @@index([email, timestamp])
+  @@index([ipAddress, timestamp])
+  @@map("login_attempts")
+}
+
+model PasswordReset {
+  id                String            @id @default(uuid())
+  userId            String
+  token             String            @unique
+  email             String
+  expiresAt         DateTime
+  usedAt            DateTime?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime          @default(now())
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+}
+
+model EmailVerification {
+  id                String            @id @default(uuid())
+  userId            String
+  email             String
+  token             String            @unique
+  expiresAt         DateTime
+  verifiedAt        DateTime?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime          @default(now())
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verifications")
+}
+
+model SocialAccount {
+  id                String            @id @default(uuid())
+  userId            String
+  provider          SocialProvider
+  providerId        String
+  providerUsername  String?
+  providerEmail     String?
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         DateTime?
+  scope             String?
+  tokenType         String?
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@map("social_accounts")
+}
+
+model SSOProvider {
+  id                String            @id @default(uuid())
+  name              String
+  displayName       String
+  type              SSOType
+  companyId         String?           // null means global provider
+  config            Json              // Provider-specific configuration
+  isActive          Boolean           @default(true)
+  metadata          Json              @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  @@unique([name, companyId])
+  @@map("sso_providers")
+}
+
+model AuditLog {
+  id                String            @id @default(uuid())
+  entityType        String
+  entityId          String
+  action            AuditAction
+  oldValues         Json?
+  newValues         Json?
+  changes           Json?
+  userId            String?
+  companyId         String?
+  ipAddress         String?
+  userAgent         String?
+  timestamp         DateTime          @default(now())
+  metadata          Json              @default("{}")
+
+  // Relations
+  user              User?             @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([companyId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model SystemConfig {
+  id                String            @id @default(uuid())
+  key               String            @unique
+  value             Json
+  description       String?
+  category          String?
+  isEncrypted       Boolean           @default(false)
+  isPublic          Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  @@map("system_config")
+}
+
+// Enums
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  LOCKED
+}
+
+enum AccessLevel {
+  FULL
+  LIMITED
+  READ_ONLY
+}
+
+enum UserCompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+  INVITED
+}
+
+enum SocialProvider {
+  GOOGLE
+  MICROSOFT
+  LINKEDIN
+  FACEBOOK
+  TWITTER
+  GITHUB
+}
+
+enum SSOType {
+  SAML
+  OAUTH2
+  OIDC
+  LDAP
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ACCESS
+  EXPORT
+  IMPORT
+  INVITE
+  APPROVE
+  REJECT
+}

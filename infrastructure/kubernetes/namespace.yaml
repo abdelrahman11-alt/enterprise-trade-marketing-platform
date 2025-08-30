@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trade-marketing
+  labels:
+    name: trade-marketing
+    environment: production
+    app.kubernetes.io/name: trade-marketing-platform
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubernetes
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trade-marketing-staging
+  labels:
+    name: trade-marketing-staging
+    environment: staging
+    app.kubernetes.io/name: trade-marketing-platform
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubernetes
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trade-marketing-dev
+  labels:
+    name: trade-marketing-dev
+    environment: development
+    app.kubernetes.io/name: trade-marketing-platform
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubernetes
